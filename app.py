@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+ # -*- coding: utf-8 -*-
 """
 From Black Box to Glass Box – Explainable PMS Experiment
 
@@ -303,9 +303,15 @@ row1_cols = st.columns(3)
 for col, sector in zip(row1_cols, sectors[:3]):
     with col:
         tickers = SECTOR_MAP[sector]
-        mu = mu_ann.loc[tickers]
-        vol = vol_ann.loc[tickers]
-        corr = avg_corr.loc[tickers]
+        valid_tickers = [t for t in tickers if t in mu_ann.index and t in vol_ann.index and t in avg_corr.index]
+
+        if len(valid_tickers) < len(tickers):
+            st.caption("⚠️ Some market data unavailable today")
+
+        mu = mu_ann.loc[valid_tickers]
+        vol = vol_ann.loc[valid_tickers]
+        corr = avg_corr.loc[valid_tickers]
+        tickers = valid_tickers
 
         df_sec = pd.DataFrame({"mu": mu, "vol": vol, "corr": corr})
         df_norm = (df_sec - df_sec.min()) / (df_sec.max() - df_sec.min() + 1e-9)
@@ -360,9 +366,15 @@ row2_cols = st.columns(2)
 for col, sector in zip(row2_cols, sectors[3:]):
     with col:
         tickers = SECTOR_MAP[sector]
-        mu = mu_ann.loc[tickers]
-        vol = vol_ann.loc[tickers]
-        corr = avg_corr.loc[tickers]
+        valid_tickers = [t for t in tickers if t in mu_ann.index and t in vol_ann.index and t in avg_corr.index]
+
+        if len(valid_tickers) < len(tickers):
+            st.caption("⚠️ Some market data unavailable today")
+
+        mu = mu_ann.loc[valid_tickers]
+        vol = vol_ann.loc[valid_tickers]
+        corr = avg_corr.loc[valid_tickers]
+        tickers = valid_tickers
 
         df_sec = pd.DataFrame({"mu": mu, "vol": vol, "corr": corr})
         df_norm = (df_sec - df_sec.min()) / (df_sec.max() - df_sec.min() + 1e-9)
@@ -411,10 +423,6 @@ for col, sector in zip(row2_cols, sectors[3:]):
         sector_choices[sector] = choice
         selected_tickers.append(choice)
 
-st.caption(
-    "The final portfolio will include one stock from each sector, "
-    "with equal 20% weights."
-)
 
 
 st.caption(
@@ -425,7 +433,18 @@ st.caption(
 # ---------- PORTFOLIO CALCULATIONS ----------
 
 weights_series = pd.Series(0.0, index=ALL_TICKERS)
+
+valid_selected = [
+    t for t in selected_tickers
+    if t in mu_ann.index and t in cov_ann.index and t in cov_ann.columns
+]
+
+if len(valid_selected) < len(selected_tickers):
+    st.caption("⚠️ Some selected stocks could not be included because market data was missing")
+
+selected_tickers = valid_selected
 n_sel = len(selected_tickers)
+
 if n_sel == 0:
     st.error("No stocks selected. Something went wrong.")
     st.stop()
