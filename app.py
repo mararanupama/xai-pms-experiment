@@ -14,6 +14,8 @@ import yfinance as yf
 from datetime import date, timedelta, datetime
 import uuid
 import altair as alt
+import gspread
+from google.oauth2.service_account import Credentials
 
 # ---------- CONFIG ----------
 
@@ -51,6 +53,7 @@ FUTURE_YEARS = 5
 # Experiment metadata
 EXPERIMENT_NAME = "xai_pms_trust_v2"
 LOG_FILE = "experiment_logs.csv"
+GOOGLE_SHEET_ID = "1HCIz5EorrbMBJE2b0Z_MLu4g0BAjwLLtavwVOnY5i0g"
 
 st.set_page_config(page_title="Explainable Portfolio Playground", layout="wide")
 
@@ -65,9 +68,26 @@ def get_session_id():
 
 
 def log_response(row_dict):
-    """Append one response as a row into experiment_logs.csv"""
+    """Save one response to Google Sheets, with a local CSV fallback."""
     row_dict["timestamp"] = datetime.utcnow().isoformat()
     df_row = pd.DataFrame([row_dict])
+
+    try:
+        service_account_info = dict(st.secrets["gcp_service_account"])
+        credentials = Credentials.from_service_account_info(
+            service_account_info,
+            scopes=["https://www.googleapis.com/auth/spreadsheets"],
+        )
+        client = gspread.authorize(credentials)
+        worksheet = client.open_by_key(GOOGLE_SHEET_ID).worksheet("Responses")
+        headers = worksheet.row_values(1)
+        worksheet.append_row(
+            [row_dict.get(header, "") for header in headers],
+            value_input_option="USER_ENTERED",
+        )
+        return "google_sheets"
+    except Exception:
+        pass
 
     try:
         existing = pd.read_csv(LOG_FILE)
@@ -76,6 +96,7 @@ def log_response(row_dict):
         df_out = df_row
 
     df_out.to_csv(LOG_FILE, index=False)
+    return "csv"
 
 
 # ---------- CORE PORTFOLIO LOGIC ----------
@@ -714,5 +735,10 @@ if st.button("Submit your response"):
         row[f"top_{i}_asset"] = tkr
         row[f"top_{i}_weight"] = float(w)
 
-    log_response(row)
-    st.success("Thanks! Your response has been recorded.")
+    storage = log_response(row)
+    if storage == "google_sheets":
+        st.success("Thanks! Your response has been recorded.")
+    else:
+        st.warning(
+            "Your response was recorded temporarily. Persistent storage is currently unavailable."
+        )

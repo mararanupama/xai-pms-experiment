@@ -3,3 +3,5 @@ pandas
 numpy
 yfinance
 altair
+gspread
+google-auth
